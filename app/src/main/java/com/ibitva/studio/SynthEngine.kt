@@ -10,16 +10,15 @@ object SynthEngine {
  fun sample(m:Int,t:Double,d:Double,w:Int,v:Float=.8f):Float {
   val ph=2*PI*hz(m)*t
   val raw=when(w){1->if(sin(ph)>=0)1.0 else -1.0;2->2*(ph/(2*PI)-floor(ph/(2*PI)+.5));3->asin(sin(ph))*2/PI;else->sin(ph)}
-  val env=min(1.0,t/.012)* (if(t<.08)1.0 else .72+.28*exp(-(t-.08)*3))*min(1.0,(d-t)/.07).coerceAtLeast(0.0)
+  val env=min(1.0,t/.012)*(if(t<.08)1.0 else .72+.28*exp(-(t-.08)*3))*min(1.0,(d-t)/.07).coerceAtLeast(0.0)
   return (raw*env*v*.24).toFloat()
  }
  fun render(notes:List<Note>,bpm:Int,seconds:Double):ByteArray {
-  val frames=(SR*seconds).toInt();val pcm=ShortArray(frames*2)
-  notes.forEach { n-> val st=n.step*60.0/bpm/4;val len=n.length*60.0/bpm/4
-   val a=(st*SR).toInt().coerceAtLeast(0);val z=((st+len)*SR).toInt().coerceAtMost(frames)
-   for(i in a until z){val x=(pcm[2*i]/32768.0+sample(n.pitch,(i-a).toDouble()/SR,len,n.wave,n.velocity)).coerceIn(-.95,.95).toInt();val q=(x*32767).toShort();pcm[2*i]=q;pcm[2*i+1]=q}
+  val frames=(SR*seconds).toInt();val pcm=FloatArray(frames*2)
+  notes.forEach { n->val st=n.step*60.0/bpm/4;val len=n.length*60.0/bpm/4;val a=(st*SR).toInt().coerceAtLeast(0);val z=((st+len)*SR).toInt().coerceAtMost(frames)
+   for(i in a until z){val v=sample(n.pitch,(i-a).toDouble()/SR,len,n.wave,n.velocity);pcm[2*i]=(pcm[2*i]+v).coerceIn(-.95f,.95f);pcm[2*i+1]=pcm[2*i]}
   }
-  val b=ByteArray(pcm.size*2);pcm.forEachIndexed{i,s->b[2*i]=s.toByte();b[2*i+1]=(s.toInt() shr 8).toByte()};return b
+  val b=ByteArray(pcm.size*2);pcm.forEachIndexed{i,s->val q=(s*32767).toInt();b[2*i]=q.toByte();b[2*i+1]=(q shr 8).toByte()};return b
  }
  fun play(notes:List<Note>,bpm:Int){Thread{
   val dur=max(4.0,notes.maxOfOrNull{it.step+it.length}?.let{it*60.0/bpm/4}?:4.0);val data=render(notes,bpm,dur)
